@@ -16,7 +16,7 @@ int64_t check_split_dim(const at::Tensor& self, int64_t dim) {
 
 at::Tensor split_view(const at::Tensor& self,
                       c10::SmallVector<int64_t, 8>& sizes,
-                      const c10::SmallVector<int64_t, 8>& strides,
+                      at::IntArrayRef strides,
                       int64_t dim,
                       int64_t start,
                       int64_t length,
@@ -51,12 +51,13 @@ std::vector<at::Tensor> unsafe_split(
               dim_size);
 
   c10::SmallVector<int64_t, 8> sizes(self.sizes().begin(), self.sizes().end());
-  const c10::SmallVector<int64_t, 8> strides(self.strides().begin(), self.strides().end());
+  const at::IntArrayRef strides = self.strides();
   const int64_t base_storage_offset = self.storage_offset();
   const int64_t dim_stride = self.stride(dim);
 
   if (dim_size == 0) {
     std::vector<at::Tensor> outs;
+    outs.reserve(1);
     outs.emplace_back(split_view(
         self, sizes, strides, dim, 0, 0, base_storage_offset, dim_stride));
     reset_version_counter(outs.back());
@@ -83,7 +84,7 @@ std::vector<at::Tensor> unsafe_split_with_sizes(
   const int64_t dim_size = self.size(dim);
 
   c10::SmallVector<int64_t, 8> sizes(self.sizes().begin(), self.sizes().end());
-  const c10::SmallVector<int64_t, 8> strides(self.strides().begin(), self.strides().end());
+  const at::IntArrayRef strides = self.strides();
   const int64_t base_storage_offset = self.storage_offset();
   const int64_t dim_stride = self.stride(dim);
 
