@@ -15,6 +15,7 @@ add_library(operators
             nonzero.cpp
             contiguous.cpp
             cat.cpp
+            unsafe_split.cpp
             bmm.cpp
             embedding.cpp
             argmax.cpp
