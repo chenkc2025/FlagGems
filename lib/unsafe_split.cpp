@@ -1,6 +1,7 @@
 #include <algorithm>
 
 #include <c10/core/TensorImpl.h>
+#include <c10/util/SmallVector.h>
 
 #include "flag_gems/operators.h"
 
@@ -14,8 +15,8 @@ int64_t check_split_dim(const at::Tensor& self, int64_t dim) {
 }
 
 at::Tensor split_view(const at::Tensor& self,
-                      std::vector<int64_t>& sizes,
-                      const std::vector<int64_t>& strides,
+                      c10::SmallVector<int64_t, 8>& sizes,
+                      const c10::SmallVector<int64_t, 8>& strides,
                       int64_t dim,
                       int64_t start,
                       int64_t length,
@@ -49,8 +50,8 @@ std::vector<at::Tensor> unsafe_split(
               "split_size can only be 0 if dimension size is 0, but got dimension size of ",
               dim_size);
 
-  std::vector<int64_t> sizes = self.sizes().vec();
-  const std::vector<int64_t> strides = self.strides().vec();
+  c10::SmallVector<int64_t, 8> sizes(self.sizes().begin(), self.sizes().end());
+  const c10::SmallVector<int64_t, 8> strides(self.strides().begin(), self.strides().end());
   const int64_t base_storage_offset = self.storage_offset();
   const int64_t dim_stride = self.stride(dim);
 
@@ -81,7 +82,7 @@ std::vector<at::Tensor> unsafe_split_with_sizes(
   dim = check_split_dim(self, dim);
 
   int64_t total = 0;
-  std::vector<int64_t> split_sizes_int;
+  c10::SmallVector<int64_t, 8> split_sizes_int;
   split_sizes_int.reserve(split_sizes.size());
   for (const c10::SymInt& split_size : split_sizes) {
     const int64_t split_size_int = split_size.expect_int();
@@ -97,11 +98,11 @@ std::vector<at::Tensor> unsafe_split_with_sizes(
               dim_size,
               " (input tensor's size at dimension ",
               dim,
-              "), but got split_sizes=",
-              split_sizes_int);
+              "), but got total=",
+              total);
 
-  std::vector<int64_t> sizes = self.sizes().vec();
-  const std::vector<int64_t> strides = self.strides().vec();
+  c10::SmallVector<int64_t, 8> sizes(self.sizes().begin(), self.sizes().end());
+  const c10::SmallVector<int64_t, 8> strides(self.strides().begin(), self.strides().end());
   const int64_t base_storage_offset = self.storage_offset();
   const int64_t dim_stride = self.stride(dim);
 
