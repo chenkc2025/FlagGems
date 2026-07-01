@@ -112,7 +112,7 @@ PYBIND11_MODULE(c_operators, m) {
   m.def(
       "unsafe_split",
       [](const at::Tensor &self, int64_t split_size, int64_t dim) {
-        return flag_gems::unsafe_split(self, c10::SymInt(split_size), dim);
+        return flag_gems::unsafe_split(self, split_size, dim);
       },
       py::arg("self"),
       py::arg("split_size"),
@@ -218,7 +218,7 @@ TORCH_LIBRARY(flag_gems, m) {
   m.def("topk(Tensor x, SymInt k, int dim, bool largest, bool sorted) -> (Tensor, Tensor)");
   m.def("contiguous(Tensor(a) self, *, MemoryFormat memory_format=contiguous_format) -> Tensor(a)");
   m.def("cat(Tensor[] tensors, int dim=0) -> Tensor");
-  m.def("unsafe_split(Tensor self, SymInt split_size, int dim=0) -> Tensor[]");
+  m.def("unsafe_split(Tensor self, int split_size, int dim=0) -> Tensor[]");
   m.def("unsafe_split_with_sizes(Tensor self, int[] split_sizes, int dim=0) -> Tensor[]");
   m.def("bmm(Tensor self, Tensor mat2) -> Tensor");
   m.def(
