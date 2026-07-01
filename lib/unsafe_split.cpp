@@ -13,23 +13,22 @@ int64_t check_split_dim(const at::Tensor& self, int64_t dim) {
   return at::maybe_wrap_dim(dim, ndim);
 }
 
-at::Tensor split_view(
-    const at::Tensor& self,
-    int64_t dim,
-    int64_t start,
-    int64_t length) {
-  std::vector<int64_t> sizes = self.sizes().vec();
-  std::vector<int64_t> strides = self.strides().vec();
+at::Tensor split_view(const at::Tensor& self,
+                      std::vector<int64_t>& sizes,
+                      const std::vector<int64_t>& strides,
+                      int64_t dim,
+                      int64_t start,
+                      int64_t length,
+                      int64_t base_storage_offset,
+                      int64_t dim_stride) {
   sizes[dim] = length;
-  const int64_t storage_offset = self.storage_offset() + start * self.stride(dim);
+  const int64_t storage_offset = base_storage_offset + start * dim_stride;
   return self.as_strided(sizes, strides, storage_offset);
 }
 
-void reset_version_counters(std::vector<at::Tensor>& outs) {
-  for (at::Tensor& out : outs) {
-    if (!out.is_inference()) {
-      out.unsafeGetTensorImpl()->set_version_counter(c10::VariableVersion(0));
-    }
+void reset_version_counter(at::Tensor& out) {
+  if (!out.is_inference()) {
+    out.unsafeGetTensorImpl()->set_version_counter(c10::VariableVersion(0));
   }
 }
 
@@ -50,9 +49,16 @@ std::vector<at::Tensor> unsafe_split(
               "split_size can only be 0 if dimension size is 0, but got dimension size of ",
               dim_size);
 
+  std::vector<int64_t> sizes = self.sizes().vec();
+  const std::vector<int64_t> strides = self.strides().vec();
+  const int64_t base_storage_offset = self.storage_offset();
+  const int64_t dim_stride = self.stride(dim);
+
   if (dim_size == 0) {
-    std::vector<at::Tensor> outs = {split_view(self, dim, 0, 0)};
-    reset_version_counters(outs);
+    std::vector<at::Tensor> outs;
+    outs.emplace_back(split_view(
+        self, sizes, strides, dim, 0, 0, base_storage_offset, dim_stride));
+    reset_version_counter(outs.back());
     return outs;
   }
 
@@ -61,9 +67,10 @@ std::vector<at::Tensor> unsafe_split(
   outs.reserve(num_splits);
   for (int64_t start = 0; start < dim_size; start += split_size_int) {
     const int64_t length = std::min(split_size_int, dim_size - start);
-    outs.emplace_back(split_view(self, dim, start, length));
+    outs.emplace_back(split_view(
+        self, sizes, strides, dim, start, length, base_storage_offset, dim_stride));
+    reset_version_counter(outs.back());
   }
-  reset_version_counters(outs);
   return outs;
 }
 
@@ -93,14 +100,20 @@ std::vector<at::Tensor> unsafe_split_with_sizes(
               "), but got split_sizes=",
               split_sizes_int);
 
+  std::vector<int64_t> sizes = self.sizes().vec();
+  const std::vector<int64_t> strides = self.strides().vec();
+  const int64_t base_storage_offset = self.storage_offset();
+  const int64_t dim_stride = self.stride(dim);
+
   std::vector<at::Tensor> outs;
   outs.reserve(split_sizes_int.size());
   int64_t start = 0;
   for (const int64_t length : split_sizes_int) {
-    outs.emplace_back(split_view(self, dim, start, length));
+    outs.emplace_back(split_view(
+        self, sizes, strides, dim, start, length, base_storage_offset, dim_stride));
+    reset_version_counter(outs.back());
     start += length;
   }
-  reset_version_counters(outs);
   return outs;
 }
 
