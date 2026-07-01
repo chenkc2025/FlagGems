@@ -37,8 +37,9 @@ void reset_version_counter(at::Tensor& out) {
 
 std::vector<at::Tensor> unsafe_split(
     const at::Tensor& self,
-    int64_t split_size_int,
+    c10::SymInt split_size,
     int64_t dim) {
+  const int64_t split_size_int = split_size.expect_int();
   TORCH_CHECK(split_size_int >= 0,
               "split expects split_size be non-negative, but got split_size=",
               split_size_int);
