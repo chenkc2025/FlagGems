@@ -80,26 +80,7 @@ std::vector<at::Tensor> unsafe_split_with_sizes(
     c10::SymIntArrayRef split_sizes,
     int64_t dim) {
   dim = check_split_dim(self, dim);
-
-  int64_t total = 0;
-  c10::SmallVector<int64_t, 8> split_sizes_int;
-  split_sizes_int.reserve(split_sizes.size());
-  for (const c10::SymInt& split_size : split_sizes) {
-    const int64_t split_size_int = split_size.expect_int();
-    TORCH_CHECK(split_size_int >= 0,
-                "split_with_sizes expects split_sizes have only non-negative entries");
-    split_sizes_int.push_back(split_size_int);
-    total += split_size_int;
-  }
-
   const int64_t dim_size = self.size(dim);
-  TORCH_CHECK(total == dim_size,
-              "split_with_sizes expects split_sizes to sum exactly to ",
-              dim_size,
-              " (input tensor's size at dimension ",
-              dim,
-              "), but got total=",
-              total);
 
   c10::SmallVector<int64_t, 8> sizes(self.sizes().begin(), self.sizes().end());
   const c10::SmallVector<int64_t, 8> strides(self.strides().begin(), self.strides().end());
@@ -107,14 +88,23 @@ std::vector<at::Tensor> unsafe_split_with_sizes(
   const int64_t dim_stride = self.stride(dim);
 
   std::vector<at::Tensor> outs;
-  outs.reserve(split_sizes_int.size());
+  outs.reserve(split_sizes.size());
   int64_t start = 0;
-  for (const int64_t length : split_sizes_int) {
+  for (const c10::SymInt& split_size : split_sizes) {
+    const int64_t length = split_size.expect_int();
+    TORCH_CHECK(length >= 0,
+                "split_with_sizes expects split_sizes have only non-negative entries");
     outs.emplace_back(split_view(
         self, sizes, strides, dim, start, length, base_storage_offset, dim_stride));
     reset_version_counter(outs.back());
     start += length;
   }
+  TORCH_CHECK(start == dim_size,
+              "split_with_sizes expects split_sizes to sum exactly to ",
+              dim_size,
+              " (input tensor's size at dimension ",
+              dim,
+              ")");
   return outs;
 }
 
