@@ -94,7 +94,7 @@ at::Tensor cat(const at::TensorList &tensors, int64_t dim = 0);
 std::vector<at::Tensor> unsafe_split(
     const at::Tensor &self, c10::SymInt split_size, int64_t dim = 0);
 std::vector<at::Tensor> unsafe_split_with_sizes(
-    const at::Tensor &self, c10::SymIntArrayRef split_sizes, int64_t dim = 0);
+    const at::Tensor &self, at::IntArrayRef split_sizes, int64_t dim = 0);
 at::Tensor bmm(const at::Tensor &A, const at::Tensor &B);
 at::Tensor embedding(const at::Tensor &weight,
                      const at::Tensor &indices,

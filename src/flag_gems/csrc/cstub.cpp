@@ -122,13 +122,7 @@ PYBIND11_MODULE(c_operators, m) {
       [](const at::Tensor &self,
          const std::vector<int64_t> &split_sizes,
          int64_t dim) {
-        std::vector<c10::SymInt> sym_split_sizes;
-        sym_split_sizes.reserve(split_sizes.size());
-        for (const int64_t split_size : split_sizes) {
-          sym_split_sizes.emplace_back(split_size);
-        }
-        return flag_gems::unsafe_split_with_sizes(
-            self, c10::SymIntArrayRef(sym_split_sizes), dim);
+        return flag_gems::unsafe_split_with_sizes(self, at::IntArrayRef(split_sizes), dim);
       },
       py::arg("self"),
       py::arg("split_sizes"),
@@ -225,7 +219,7 @@ TORCH_LIBRARY(flag_gems, m) {
   m.def("contiguous(Tensor(a) self, *, MemoryFormat memory_format=contiguous_format) -> Tensor(a)");
   m.def("cat(Tensor[] tensors, int dim=0) -> Tensor");
   m.def("unsafe_split(Tensor self, SymInt split_size, int dim=0) -> Tensor[]");
-  m.def("unsafe_split_with_sizes(Tensor self, SymInt[] split_sizes, int dim=0) -> Tensor[]");
+  m.def("unsafe_split_with_sizes(Tensor self, int[] split_sizes, int dim=0) -> Tensor[]");
   m.def("bmm(Tensor self, Tensor mat2) -> Tensor");
   m.def(
       "embedding(Tensor weight, Tensor indices, SymInt padding_idx=-1, bool scale_grad_by_freq=False, bool "

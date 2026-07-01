@@ -77,7 +77,7 @@ std::vector<at::Tensor> unsafe_split(
 
 std::vector<at::Tensor> unsafe_split_with_sizes(
     const at::Tensor& self,
-    c10::SymIntArrayRef split_sizes,
+    at::IntArrayRef split_sizes,
     int64_t dim) {
   dim = check_split_dim(self, dim);
   const int64_t dim_size = self.size(dim);
@@ -90,8 +90,7 @@ std::vector<at::Tensor> unsafe_split_with_sizes(
   std::vector<at::Tensor> outs;
   outs.reserve(split_sizes.size());
   int64_t start = 0;
-  for (const c10::SymInt& split_size : split_sizes) {
-    const int64_t length = split_size.expect_int();
+  for (const int64_t length : split_sizes) {
     TORCH_CHECK(length >= 0,
                 "split_with_sizes expects split_sizes have only non-negative entries");
     outs.emplace_back(split_view(
