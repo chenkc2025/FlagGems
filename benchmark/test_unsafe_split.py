@@ -4,7 +4,8 @@ import pytest
 import torch
 
 import flag_gems
-from flag_gems.config import has_c_extension
+from flag_gems.config import c_operators, has_c_extension
+from flag_gems.ops.unsafe_split import unsafe_split, unsafe_split_with_sizes
 
 from . import base
 
@@ -50,11 +51,12 @@ TEST_DEVICE = _test_device()
 pytestmark = pytest.mark.skipif(
     not (
         has_c_extension
-        and hasattr(torch.ops.flag_gems, "unsafe_split")
-        and hasattr(torch.ops.flag_gems, "unsafe_split_with_sizes")
+        and c_operators is not None
+        and hasattr(c_operators, "unsafe_split")
+        and hasattr(c_operators, "unsafe_split_with_sizes")
         and TEST_DEVICE is not None
     ),
-    reason="unsafe_split C++ wrapper requires an available FlagGems backend device",
+    reason="unsafe_split Python wrapper requires an available FlagGems C extension backend device",
 )
 
 
@@ -103,9 +105,9 @@ class UnsafeSplitBenchmark(base.GenericBenchmark):
 @pytest.mark.unsafe_split
 def test_unsafe_split():
     bench = UnsafeSplitBenchmark(
-        op_name="unsafe_split",
+        op_name="unsafe_split_py_wrapper",
         torch_op=torch.ops.aten.unsafe_split.Tensor,
-        gems_op=torch.ops.flag_gems.unsafe_split,
+        gems_op=unsafe_split,
         input_fn=_split_input_fn,
         dtypes=BENCH_DTYPES,
     )
@@ -115,9 +117,9 @@ def test_unsafe_split():
 @pytest.mark.unsafe_split_with_sizes
 def test_unsafe_split_with_sizes():
     bench = UnsafeSplitBenchmark(
-        op_name="unsafe_split_with_sizes",
+        op_name="unsafe_split_with_sizes_py_wrapper",
         torch_op=torch.ops.aten.unsafe_split_with_sizes.default,
-        gems_op=torch.ops.flag_gems.unsafe_split_with_sizes,
+        gems_op=unsafe_split_with_sizes,
         input_fn=_split_with_sizes_input_fn,
         dtypes=BENCH_DTYPES,
     )

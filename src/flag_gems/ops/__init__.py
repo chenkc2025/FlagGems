@@ -367,6 +367,7 @@ from flag_gems.ops.tril import tril, tril_, tril_out
 from flag_gems.ops.triu import triu, triu_
 from flag_gems.ops.unfold_backward import unfold_backward
 from flag_gems.ops.uniform import uniform_
+from flag_gems.ops.unsafe_split import unsafe_split, unsafe_split_with_sizes
 from flag_gems.ops.unique import _unique2
 from flag_gems.ops.unique_consecutive import unique_consecutive
 from flag_gems.ops.upsample_bicubic2d import upsample_bicubic2d
@@ -877,6 +878,8 @@ __all__ = [
     "true_divide_out",
     "unfold_backward",
     "uniform_",
+    "unsafe_split",
+    "unsafe_split_with_sizes",
     "unique_consecutive",
     "upsample_bicubic2d",
     "upsample_linear1d",
