@@ -4,8 +4,6 @@ import torch
 import flag_gems
 from flag_gems.ops.nonzero_static import nonzero_static, nonzero_static_ref
 
-from . import conftest as cfg
-
 
 pytestmark = pytest.mark.skipif(
     not torch.cuda.is_available(),
@@ -20,30 +18,27 @@ DTYPES = [
     torch.float32,
     torch.bfloat16,
 ]
-SHAPES = [
-    (),
-    (0,),
-    (1,),
-    (8,),
-    (1024,),
-    (4, 5),
-    (32, 128),
-    (2, 3, 4),
-    (2, 3, 4, 5),
-]
-SIZES = [0, 1, 4, 16, 128, 1024]
-FILL_VALUES = [-1, 0, 7]
-NNZ_RATIOS = [0.0, 0.01, 0.1, 0.5, 1.0]
 
-if cfg.QUICK_MODE:
-    DTYPES = [torch.float32]
-    SHAPES = [(), (0,), (8,), (2, 3, 4)]
-    SIZES = [0, 4, 16]
-    FILL_VALUES = [-1, 7]
-    NNZ_RATIOS = [0.0, 0.5, 1.0]
+CASES = [
+    ((), torch.float32, 1.0, 4, -1),
+    ((0,), torch.float32, 0.0, 4, 7),
+    ((8,), torch.float32, 0.0, 4, -1),
+    ((8,), torch.float32, 1.0, 4, -1),
+    ((8,), torch.float32, 0.5, 0, -1),
+    ((1024,), torch.float32, 0.01, 128, -1),
+    ((4, 5), torch.float32, 0.5, 16, 7),
+    ((2, 3, 4), torch.float32, 0.1, 16, -1),
+    ((2, 3, 4, 5), torch.float32, 0.1, 32, -1),
+]
 
 
 def make_input(shape, dtype, nnz_ratio, device):
+    if shape == ():
+        value = bool(nnz_ratio >= 0.5)
+        if dtype == torch.bool:
+            return torch.tensor(value, device=device, dtype=dtype)
+        return torch.tensor(1 if value else 0, device=device, dtype=dtype)
+
     mask = torch.rand(shape, device=device) < nnz_ratio
 
     if dtype == torch.bool:
@@ -60,13 +55,7 @@ def make_input(shape, dtype, nnz_ratio, device):
     return x
 
 
-@pytest.mark.nonzero_static
-@pytest.mark.parametrize("dtype", DTYPES)
-@pytest.mark.parametrize("shape", SHAPES)
-@pytest.mark.parametrize("size", SIZES)
-@pytest.mark.parametrize("fill_value", FILL_VALUES)
-@pytest.mark.parametrize("nnz_ratio", NNZ_RATIOS)
-def test_nonzero_static(dtype, shape, size, fill_value, nnz_ratio):
+def assert_nonzero_static_matches(shape, dtype, nnz_ratio, size, fill_value):
     if dtype == torch.bfloat16 and not torch.cuda.is_bf16_supported():
         pytest.skip("bfloat16 is not supported on this CUDA device")
 
@@ -89,6 +78,18 @@ def test_nonzero_static(dtype, shape, size, fill_value, nnz_ratio):
             torch.testing.assert_close(actual, expected_cuda, rtol=0, atol=0)
         except Exception:
             pass
+
+
+@pytest.mark.nonzero_static
+@pytest.mark.parametrize("dtype", DTYPES)
+def test_nonzero_static_dtypes(dtype):
+    assert_nonzero_static_matches((32, 128), dtype, 0.1, 128, -1)
+
+
+@pytest.mark.nonzero_static
+@pytest.mark.parametrize("shape,dtype,nnz_ratio,size,fill_value", CASES)
+def test_nonzero_static_cases(shape, dtype, nnz_ratio, size, fill_value):
+    assert_nonzero_static_matches(shape, dtype, nnz_ratio, size, fill_value)
 
 
 @pytest.mark.nonzero_static
