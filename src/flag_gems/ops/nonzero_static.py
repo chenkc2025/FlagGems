@@ -9,6 +9,8 @@ from flag_gems.utils import libentry
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_BLOCK_SIZE = 1024
+
 
 @libentry()
 @triton.jit
@@ -39,6 +41,33 @@ def _nonzero_static_fill_kernel(
 ):
     pid = tl.program_id(0)
     offsets = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
+    mask = offsets < total_out
+
+    vals = tl.full((BLOCK_SIZE,), fill_value, tl.int64)
+    tl.store(out_ptr + offsets, vals, mask=mask)
+
+
+@libentry()
+@triton.jit
+def _nonzero_static_fill_tail_kernel(
+    out_ptr,
+    prefix_ptr,
+    counts_ptr,
+    num_blocks: tl.constexpr,
+    size: tl.constexpr,
+    ndim: tl.constexpr,
+    fill_value: tl.constexpr,
+    BLOCK_SIZE: tl.constexpr,
+):
+    total_nnz = tl.load(prefix_ptr + num_blocks - 1) + tl.load(
+        counts_ptr + num_blocks - 1
+    )
+    valid_rows = tl.minimum(total_nnz, size)
+    tail_start = valid_rows * ndim
+    total_out = size * ndim
+
+    pid = tl.program_id(0)
+    offsets = tail_start + pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
     mask = offsets < total_out
 
     vals = tl.full((BLOCK_SIZE,), fill_value, tl.int64)
@@ -171,19 +200,18 @@ def nonzero_static(input: torch.Tensor, size: int, fill_value: int = -1):
     x = input.contiguous()
     numel = x.numel()
 
-    block_size = 1024
+    block_size = DEFAULT_BLOCK_SIZE
     total_out = size * ndim
-    fill_grid = (triton.cdiv(total_out, block_size),)
-
-    with torch_device_fn.device(input.device):
-        _nonzero_static_fill_kernel[fill_grid](
-            out,
-            total_out,
-            fill_value,
-            BLOCK_SIZE=block_size,
-        )
 
     if numel == 0:
+        fill_grid = (triton.cdiv(total_out, block_size),)
+        with torch_device_fn.device(input.device):
+            _nonzero_static_fill_kernel[fill_grid](
+                out,
+                total_out,
+                fill_value,
+                BLOCK_SIZE=block_size,
+            )
         return out
 
     num_blocks = triton.cdiv(numel, block_size)
@@ -212,6 +240,19 @@ def nonzero_static(input: torch.Tensor, size: int, fill_value: int = -1):
             shape[1],
             shape[2],
             shape[3],
+            BLOCK_SIZE=block_size,
+        )
+
+    fill_grid = (triton.cdiv(total_out, block_size),)
+    with torch_device_fn.device(input.device):
+        _nonzero_static_fill_tail_kernel[fill_grid](
+            out,
+            prefix,
+            counts,
+            num_blocks,
+            size,
+            ndim,
+            fill_value,
             BLOCK_SIZE=block_size,
         )
 
