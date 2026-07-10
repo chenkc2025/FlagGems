@@ -617,6 +617,11 @@ _FULL_CONFIG = (
     ("nll_loss_nd_forward", nll_loss_nd_forward),
     ("nonzero", nonzero),
     ("nonzero_numpy", nonzero_numpy),
+    (
+        "nonzero_static",
+        nonzero_static,
+        lambda: hasattr(torch.ops.aten, "nonzero_static"),
+    ),
     ("norm", norm),
     ("norm.Scalar", norm_scalar),
     ("norm.ScalarOpt_dim", norm_scalaropt_dim),

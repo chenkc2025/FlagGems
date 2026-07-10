@@ -420,6 +420,7 @@ from flag_gems.ops.nllloss import (
 )
 from flag_gems.ops.nonzero import nonzero
 from flag_gems.ops.nonzero_numpy import nonzero_numpy
+from flag_gems.ops.nonzero_static import nonzero_static
 from flag_gems.ops.norm import norm, norm_scalar, norm_scalaropt_dim
 from flag_gems.ops.normal import (
     normal_,
@@ -1155,6 +1156,7 @@ __all__ = [
     "nll_loss_nd_forward",
     "nonzero",
     "nonzero_numpy",
+    "nonzero_static",
     "norm",
     "norm_scalar",
     "norm_scalaropt_dim",
