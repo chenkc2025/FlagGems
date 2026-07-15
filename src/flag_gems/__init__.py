@@ -620,8 +620,9 @@ _FULL_CONFIG = (
     (
         "nonzero_static",
         nonzero_static,
-        lambda: hasattr(torch.ops.aten, "nonzero_static"),
+        lambda: torch_ge("2.1"),
     ),
+    ("nonzero_static.out", nonzero_static_out, lambda: torch_ge("2.1")),
     ("norm", norm),
     ("norm.Scalar", norm_scalar),
     ("norm.ScalarOpt_dim", norm_scalaropt_dim),
