@@ -1,5 +1,6 @@
 import logging
 
+import flag_gems
 import torch
 import triton
 import triton.language as tl
@@ -12,20 +13,37 @@ logger = logging.getLogger(__name__)
 DEFAULT_BLOCK_SIZE = 1024
 
 
+@triton.jit
+def _load_nonzero_flags(
+    x_ptr,
+    offsets,
+    mask,
+    IS_COMPLEX: tl.constexpr,
+):
+    if IS_COMPLEX:
+        complex_offsets = offsets * 2
+        real = tl.load(x_ptr + complex_offsets, mask=mask, other=0)
+        imag = tl.load(x_ptr + complex_offsets + 1, mask=mask, other=0)
+        return (real != 0) | (imag != 0)
+
+    values = tl.load(x_ptr + offsets, mask=mask, other=0)
+    return values != 0
+
+
 @libentry()
 @triton.jit
 def _nonzero_static_count_kernel(
     x_ptr,
     counts_ptr,
     numel: tl.constexpr,
+    IS_COMPLEX: tl.constexpr,
     BLOCK_SIZE: tl.constexpr,
 ):
     pid = tl.program_id(0)
     offsets = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
     mask = offsets < numel
 
-    vals = tl.load(x_ptr + offsets, mask=mask, other=0)
-    flags = vals != 0
+    flags = _load_nonzero_flags(x_ptr, offsets, mask, IS_COMPLEX)
 
     cnt = tl.sum(flags.to(tl.int32), axis=0)
     tl.store(counts_ptr + pid, cnt.to(tl.int64))
@@ -52,16 +70,13 @@ def _nonzero_static_fill_kernel(
 def _nonzero_static_fill_tail_kernel(
     out_ptr,
     prefix_ptr,
-    counts_ptr,
     num_blocks: tl.constexpr,
     size: tl.constexpr,
     ndim: tl.constexpr,
     fill_value: tl.constexpr,
     BLOCK_SIZE: tl.constexpr,
 ):
-    total_nnz = tl.load(prefix_ptr + num_blocks - 1) + tl.load(
-        counts_ptr + num_blocks - 1
-    )
+    total_nnz = tl.load(prefix_ptr + num_blocks - 1)
     valid_rows = tl.minimum(total_nnz, size)
     tail_start = valid_rows * ndim
     total_out = size * ndim
@@ -79,24 +94,23 @@ def _nonzero_static_fill_tail_kernel(
 def _nonzero_static_write_kernel(
     x_ptr,
     prefix_ptr,
+    counts_ptr,
     out_ptr,
+    shape_ptr,
     size: tl.constexpr,
     numel: tl.constexpr,
     ndim: tl.constexpr,
-    D0: tl.constexpr,
-    D1: tl.constexpr,
-    D2: tl.constexpr,
-    D3: tl.constexpr,
+    IS_COMPLEX: tl.constexpr,
     BLOCK_SIZE: tl.constexpr,
 ):
     pid = tl.program_id(0)
     offsets = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
     mask = offsets < numel
 
-    vals = tl.load(x_ptr + offsets, mask=mask, other=0)
-    flags = vals != 0
+    flags = _load_nonzero_flags(x_ptr, offsets, mask, IS_COMPLEX)
 
-    prefix = tl.load(prefix_ptr + pid)
+    block_nnz = tl.load(counts_ptr + pid)
+    prefix = tl.load(prefix_ptr + pid) - block_nnz
 
     local_rank = tl.cumsum(flags.to(tl.int32), 0) - 1
     global_rank = prefix + local_rank.to(tl.int64)
@@ -104,39 +118,11 @@ def _nonzero_static_write_kernel(
     write_mask = mask & flags & (global_rank < size)
     linear = offsets.to(tl.int64)
 
-    if ndim == 1:
-        c0 = linear
-        tl.store(out_ptr + global_rank * ndim, c0, mask=write_mask)
-
-    if ndim == 2:
-        c0 = linear // D1
-        c1 = linear % D1
-        tl.store(out_ptr + global_rank * ndim, c0, mask=write_mask)
-        tl.store(out_ptr + global_rank * ndim + 1, c1, mask=write_mask)
-
-    if ndim == 3:
-        s0 = D1 * D2
-        c0 = linear // s0
-        r0 = linear % s0
-        c1 = r0 // D2
-        c2 = r0 % D2
-        tl.store(out_ptr + global_rank * ndim, c0, mask=write_mask)
-        tl.store(out_ptr + global_rank * ndim + 1, c1, mask=write_mask)
-        tl.store(out_ptr + global_rank * ndim + 2, c2, mask=write_mask)
-
-    if ndim == 4:
-        s0 = D1 * D2 * D3
-        s1 = D2 * D3
-        c0 = linear // s0
-        r0 = linear % s0
-        c1 = r0 // s1
-        r1 = r0 % s1
-        c2 = r1 // D3
-        c3 = r1 % D3
-        tl.store(out_ptr + global_rank * ndim, c0, mask=write_mask)
-        tl.store(out_ptr + global_rank * ndim + 1, c1, mask=write_mask)
-        tl.store(out_ptr + global_rank * ndim + 2, c2, mask=write_mask)
-        tl.store(out_ptr + global_rank * ndim + 3, c3, mask=write_mask)
+    for dim in range(ndim - 1, -1, -1):
+        dim_size = tl.load(shape_ptr + dim)
+        coord = linear % dim_size
+        linear //= dim_size
+        tl.store(out_ptr + global_rank * ndim + dim, coord, mask=write_mask)
 
 
 def nonzero_static_ref(x: torch.Tensor, size: int, fill_value: int = -1):
@@ -176,16 +162,6 @@ def nonzero_static(input: torch.Tensor, size: int, fill_value: int = -1):
     fill_value = int(fill_value)
     ndim = input.dim()
 
-    if ndim > 4:
-        raise RuntimeError(
-            "nonzero_static Triton implementation only supports ndim <= 4"
-        )
-
-    if input.is_complex():
-        raise RuntimeError(
-            "nonzero_static Triton implementation does not support complex dtype"
-        )
-
     if not input.is_cuda:
         return nonzero_static_ref(input, size=size, fill_value=fill_value)
 
@@ -199,6 +175,7 @@ def nonzero_static(input: torch.Tensor, size: int, fill_value: int = -1):
 
     x = input.contiguous()
     numel = x.numel()
+    is_complex = x.is_complex()
 
     block_size = DEFAULT_BLOCK_SIZE
     total_out = size * ndim
@@ -214,6 +191,9 @@ def nonzero_static(input: torch.Tensor, size: int, fill_value: int = -1):
             )
         return out
 
+    shape = torch.tensor(input.shape, dtype=torch.int64, device=input.device)
+    if is_complex:
+        x = torch.view_as_real(x).reshape(-1)
     num_blocks = triton.cdiv(numel, block_size)
     counts = torch.empty((num_blocks,), device=input.device, dtype=torch.int64)
 
@@ -222,24 +202,23 @@ def nonzero_static(input: torch.Tensor, size: int, fill_value: int = -1):
             x,
             counts,
             numel,
+            IS_COMPLEX=is_complex,
             BLOCK_SIZE=block_size,
         )
 
-    prefix = torch.cumsum(counts, dim=0) - counts
-    shape = list(x.shape) + [1] * (4 - ndim)
+    prefix = flag_gems.cumsum(counts, dim=0)
 
     with torch_device_fn.device(input.device):
         _nonzero_static_write_kernel[(num_blocks,)](
             x,
             prefix,
+            counts,
             out,
+            shape,
             size,
             numel,
             ndim,
-            shape[0],
-            shape[1],
-            shape[2],
-            shape[3],
+            IS_COMPLEX=is_complex,
             BLOCK_SIZE=block_size,
         )
 
@@ -248,7 +227,6 @@ def nonzero_static(input: torch.Tensor, size: int, fill_value: int = -1):
         _nonzero_static_fill_tail_kernel[fill_grid](
             out,
             prefix,
-            counts,
             num_blocks,
             size,
             ndim,

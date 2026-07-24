@@ -12,11 +12,17 @@ pytestmark = pytest.mark.skipif(
 
 DTYPES = [
     torch.bool,
+    torch.int8,
+    torch.uint8,
+    torch.int16,
     torch.int32,
     torch.int64,
     torch.float16,
     torch.float32,
+    torch.float64,
     torch.bfloat16,
+    torch.complex64,
+    torch.complex128,
 ]
 
 CASES = [
@@ -29,6 +35,8 @@ CASES = [
     ((4, 5), torch.float32, 0.5, 16, 7),
     ((2, 3, 4), torch.float32, 0.1, 16, -1),
     ((2, 3, 4, 5), torch.float32, 0.1, 32, -1),
+    ((1, 2, 1, 3, 1), torch.float32, 0.5, 8, -1),
+    ((1, 1, 2, 1, 3, 1), torch.complex64, 0.5, 8, 7),
 ]
 
 
@@ -46,7 +54,12 @@ def make_input(shape, dtype, nnz_ratio, device):
 
     x = torch.zeros(shape, device=device, dtype=dtype)
 
-    if dtype.is_floating_point:
+    if dtype.is_complex:
+        real_dtype = torch.float64 if dtype == torch.complex128 else torch.float32
+        real = torch.randn(shape, device=device, dtype=real_dtype) + 1
+        imag = torch.randn(shape, device=device, dtype=real_dtype) + 1
+        values = torch.complex(real, imag).to(dtype)
+    elif dtype.is_floating_point:
         values = torch.randn(shape, device=device, dtype=dtype) + 1
     else:
         values = torch.randint(1, 10, shape, device=device, dtype=dtype)
@@ -120,22 +133,6 @@ def test_nonzero_static_non_contiguous_slice():
     expected = nonzero_static_ref(x_cpu_view, size=128, fill_value=7).cuda()
 
     torch.testing.assert_close(actual, expected, rtol=0, atol=0)
-
-
-@pytest.mark.nonzero_static
-def test_nonzero_static_rejects_complex():
-    x = torch.ones((8,), device="cuda", dtype=torch.complex64)
-
-    with pytest.raises(RuntimeError, match="does not support complex dtype"):
-        nonzero_static(x, size=4, fill_value=-1)
-
-
-@pytest.mark.nonzero_static
-def test_nonzero_static_rejects_ndim_gt_4():
-    x = torch.zeros((1, 1, 1, 1, 1), device="cuda", dtype=torch.float32)
-
-    with pytest.raises(RuntimeError, match="only supports ndim <= 4"):
-        nonzero_static(x, size=4, fill_value=-1)
 
 
 @pytest.mark.nonzero_static
