@@ -235,3 +235,27 @@ def nonzero_static(input: torch.Tensor, size: int, fill_value: int = -1):
         )
 
     return out
+
+
+def nonzero_static_out(
+    input: torch.Tensor, *, size: int, fill_value: int = -1, out: torch.Tensor
+):
+    logger.debug("GEMS NONZERO_STATIC_OUT")
+
+    if out.dtype != torch.int64:
+        raise RuntimeError(
+            f"Expected out tensor to have dtype torch.int64, but got {out.dtype} instead"
+        )
+    if out.device != input.device:
+        raise RuntimeError(
+            f"Expected out tensor to be on {input.device}, but got {out.device} instead"
+        )
+    size = int(size)
+    if size < 0:
+        raise RuntimeError("nonzero_static: size must be non-negative")
+    expected_shape = (size, input.dim())
+    if tuple(out.shape) != expected_shape:
+        out.resize_(expected_shape)
+    result = nonzero_static(input, size=size, fill_value=fill_value)
+    out.copy_(result)
+    return out
