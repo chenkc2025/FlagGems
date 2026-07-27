@@ -1,3 +1,17 @@
+# Copyright 2026, The FlagOS Contributors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import logging
 
 import torch
@@ -51,10 +65,6 @@ def _use_sparse_groups(input, size):
     )
 
 
-def _get_sparse_scan_group_size(input):
-    return ASCEND_SPARSE_SCAN_GROUP_SIZE
-
-
 def _use_small_linear_output(input, size):
     return (
         1 < input.dim() <= 4
@@ -77,7 +87,7 @@ def nonzero_static(input: torch.Tensor, *, size: int, fill_value: int = -1):
         small_counts_max_blocks=ASCEND_SMALL_COUNTS_MAX_BLOCKS,
         max_programs=CORE_NUM,
         scan_group_size=ASCEND_SCAN_GROUP_SIZE,
-        sparse_scan_group_size=_get_sparse_scan_group_size(input),
+        sparse_scan_group_size=ASCEND_SPARSE_SCAN_GROUP_SIZE,
         use_sparse_groups=_use_sparse_groups(input, size),
         sparse_group_select_max_nnz=ASCEND_SPARSE_GROUP_SELECT_MAX_NNZ,
         sparse_count_group_blocks=ASCEND_SPARSE_COUNT_GROUP_BLOCKS,
@@ -102,7 +112,7 @@ def nonzero_static_out(
         small_counts_max_blocks=ASCEND_SMALL_COUNTS_MAX_BLOCKS,
         max_programs=CORE_NUM,
         scan_group_size=ASCEND_SCAN_GROUP_SIZE,
-        sparse_scan_group_size=_get_sparse_scan_group_size(input),
+        sparse_scan_group_size=ASCEND_SPARSE_SCAN_GROUP_SIZE,
         use_sparse_groups=_use_sparse_groups(input, size),
         sparse_group_select_max_nnz=ASCEND_SPARSE_GROUP_SELECT_MAX_NNZ,
         sparse_count_group_blocks=ASCEND_SPARSE_COUNT_GROUP_BLOCKS,

@@ -1,3 +1,17 @@
+# Copyright 2026, The FlagOS Contributors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
 from functools import lru_cache
 from typing import Generator
@@ -9,8 +23,15 @@ import flag_gems
 
 from . import base
 
-BENCH_DTYPES = [torch.float16, torch.bfloat16]  # target report uses fp16 and bf16
-ASCEND_BASELINE_SOURCE = r"""
+BENCH_DTYPES = [  # The Ascend performance report is scoped to FP16 and BF16.
+    torch.float16,
+    torch.bfloat16,
+]
+
+# ATen composite baseline for Ascend benchmark.
+# This is not a handwritten Ascend C kernel.
+# It composes at::full, at::nonzero, and copy_.
+ASCEND_ATEN_BASELINE_SOURCE = r"""
 #include <ATen/Functions.h>
 #include <torch/library.h>
 
@@ -42,13 +63,13 @@ at::Tensor nonzero_static(
 
 }
 
-TORCH_LIBRARY(flag_gems_ascend_baseline, m) {
+TORCH_LIBRARY(flag_gems_ascend_aten_baseline, m) {
   m.def(
       "nonzero_static(Tensor input, int size, int fill_value=-1) -> Tensor");
 }
 
 TORCH_LIBRARY_IMPL(
-    flag_gems_ascend_baseline,
+    flag_gems_ascend_aten_baseline,
     CompositeExplicitAutograd,
     m) {
   m.impl("nonzero_static", TORCH_FN(nonzero_static));
@@ -73,17 +94,20 @@ BENCH_CASES = [
 
 
 @lru_cache(maxsize=1)
-def _load_ascend_baseline():
+def _load_ascend_aten_baseline():
     from torch.utils.cpp_extension import load_inline
 
+    # Keep the composition behind one C++ custom-op boundary so benchmark
+    # timing does not include Python-side composition overhead.
+    # This intentionally requires the C++ extension toolchain on benchmark hosts.
     load_inline(
-        name="flag_gems_ascend_nonzero_static_baseline",
-        cpp_sources=ASCEND_BASELINE_SOURCE,
+        name="flag_gems_ascend_aten_nonzero_static_baseline",
+        cpp_sources=ASCEND_ATEN_BASELINE_SOURCE,
         extra_cflags=["-O3"],
         is_python_module=False,
-        verbose=os.getenv("FLAGGEMS_ASCEND_BASELINE_VERBOSE", "0") == "1",
+        verbose=os.getenv("FLAGGEMS_ASCEND_ATEN_BASELINE_VERBOSE", "0") == "1",
     )
-    return torch.ops.flag_gems_ascend_baseline.nonzero_static
+    return torch.ops.flag_gems_ascend_aten_baseline.nonzero_static
 
 
 def _make_input(shape, dtype, nnz_ratio, device):
@@ -103,7 +127,9 @@ def _make_input(shape, dtype, nnz_ratio, device):
 
 def _get_baseline_nonzero_static():
     if flag_gems.vendor_name == "ascend":
-        return _load_ascend_baseline()
+        # torch.nonzero_static has no native Ascend dispatch kernel and falls
+        # back to CPU, so use the device-resident ATen composition instead.
+        return _load_ascend_aten_baseline()
     return torch.nonzero_static
 
 
@@ -124,6 +150,8 @@ class NonzeroStaticBenchmark(base.GenericBenchmark):
         self.mode = base.Config.mode
         self.set_dtypes(base.Config.user_desired_dtypes)
         self.set_metrics(base.Config.user_desired_metrics)
+        # Each case includes shape, sparsity, size, and fill_value, so generic
+        # shape-only configuration files are not compatible with this benchmark.
         self.shapes = self.DEFAULT_SHAPES
 
     def get_input_iter(self, dtype) -> Generator:
@@ -132,6 +160,10 @@ class NonzeroStaticBenchmark(base.GenericBenchmark):
 
 
 @pytest.mark.nonzero_static
+@pytest.mark.skipif(
+    flag_gems.vendor_name not in ("nvidia", "ascend"),
+    reason="nonzero_static is implemented for NVIDIA and Ascend",
+)
 def test_perf_nonzero_static():
     baseline_nonzero_static = _get_baseline_nonzero_static()
     bench = NonzeroStaticBenchmark(

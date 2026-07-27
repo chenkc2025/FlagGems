@@ -1,3 +1,17 @@
+# Copyright 2026, The FlagOS Contributors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import logging
 import operator
 
@@ -232,7 +246,6 @@ def _nonzero_static_single_block_kernel(
     size: tl.constexpr,
     numel: tl.constexpr,
     ndim: tl.constexpr,
-    D0: tl.constexpr,
     D1: tl.constexpr,
     D2: tl.constexpr,
     D3: tl.constexpr,
@@ -342,7 +355,6 @@ def _nonzero_static_write_kernel(
     numel: tl.constexpr,
     num_blocks: tl.constexpr,
     ndim: tl.constexpr,
-    D0: tl.constexpr,
     D1: tl.constexpr,
     D2: tl.constexpr,
     D3: tl.constexpr,
@@ -397,7 +409,6 @@ def _nonzero_static_write_strided_kernel(
     numel: tl.constexpr,
     num_blocks: tl.constexpr,
     ndim: tl.constexpr,
-    D0: tl.constexpr,
     D1: tl.constexpr,
     D2: tl.constexpr,
     D3: tl.constexpr,
@@ -463,7 +474,6 @@ def _nonzero_static_write_sparse_groups_kernel(
     num_blocks: tl.constexpr,
     num_count_groups: tl.constexpr,
     ndim: tl.constexpr,
-    D0: tl.constexpr,
     D1: tl.constexpr,
     D2: tl.constexpr,
     D3: tl.constexpr,
@@ -574,9 +584,7 @@ def _nonzero_static_write_sparse_groups_fallback_kernel(
     out_ptr,
     size: tl.constexpr,
     numel: tl.constexpr,
-    num_blocks: tl.constexpr,
     ndim: tl.constexpr,
-    D0: tl.constexpr,
     D1: tl.constexpr,
     D2: tl.constexpr,
     D3: tl.constexpr,
@@ -667,7 +675,6 @@ def _nonzero_static_write_small_counts_kernel(
     numel: tl.constexpr,
     num_blocks: tl.constexpr,
     ndim: tl.constexpr,
-    D0: tl.constexpr,
     D1: tl.constexpr,
     D2: tl.constexpr,
     D3: tl.constexpr,
@@ -1102,7 +1109,6 @@ def _nonzero_static_impl(
                     size,
                     numel,
                     ndim,
-                    shape[0],
                     shape[1],
                     shape[2],
                     shape[3],
@@ -1152,7 +1158,6 @@ def _nonzero_static_impl(
                 num_blocks,
                 num_count_groups,
                 ndim,
-                shape[0],
                 shape[1],
                 shape[2],
                 shape[3],
@@ -1176,9 +1181,7 @@ def _nonzero_static_impl(
                 work_out,
                 size,
                 numel,
-                num_blocks,
                 ndim,
-                shape[0],
                 shape[1],
                 shape[2],
                 shape[3],
@@ -1233,7 +1236,6 @@ def _nonzero_static_impl(
                 numel,
                 num_blocks,
                 ndim,
-                shape[0],
                 shape[1],
                 shape[2],
                 shape[3],
@@ -1311,7 +1313,6 @@ def _nonzero_static_impl(
                 numel,
                 num_blocks,
                 ndim,
-                shape[0],
                 shape[1],
                 shape[2],
                 shape[3],
