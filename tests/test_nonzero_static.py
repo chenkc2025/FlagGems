@@ -6,9 +6,15 @@ from flag_gems.ops.nonzero_static import nonzero_static, nonzero_static_out
 
 from . import accuracy_utils as utils
 
-pytestmark = pytest.mark.skipif(
-    not torch.cuda.is_available(),
+IS_ASCEND = flag_gems.vendor_name == "ascend"
+NPU = getattr(torch, "npu", None)
+CUDA_ONLY = pytest.mark.skipif(
+    IS_ASCEND or not torch.cuda.is_available(),
     reason="nonzero_static Triton implementation requires CUDA",
+)
+ASCEND_ONLY = pytest.mark.skipif(
+    not IS_ASCEND or NPU is None or not NPU.is_available(),
+    reason="nonzero_static Triton-Ascend implementation requires NPU",
 )
 
 
@@ -92,24 +98,28 @@ def assert_nonzero_static_matches(shape, dtype, nnz_ratio, size, fill_value):
     utils.gems_assert_equal(actual, expected)
 
 
+@CUDA_ONLY
 @pytest.mark.nonzero_static
 @pytest.mark.parametrize("dtype", DTYPES)
 def test_nonzero_static_dtypes(dtype):
     assert_nonzero_static_matches((32, 128), dtype, 0.1, 128, -1)
 
 
+@CUDA_ONLY
 @pytest.mark.nonzero_static
 @pytest.mark.parametrize("shape,dtype,nnz_ratio,size,fill_value", CASES)
 def test_nonzero_static_cases(shape, dtype, nnz_ratio, size, fill_value):
     assert_nonzero_static_matches(shape, dtype, nnz_ratio, size, fill_value)
 
 
+@CUDA_ONLY
 @pytest.mark.nonzero_static
 @pytest.mark.parametrize("shape,dtype,nnz_ratio,size,fill_value", TARGETED_PATH_CASES)
 def test_nonzero_static_targeted_paths(shape, dtype, nnz_ratio, size, fill_value):
     assert_nonzero_static_matches(shape, dtype, nnz_ratio, size, fill_value)
 
 
+@CUDA_ONLY
 @pytest.mark.nonzero_static
 @pytest.mark.parametrize("dtype", COMPLEX_DTYPES)
 def test_nonzero_static_complex(dtype):
@@ -126,6 +136,7 @@ def test_nonzero_static_complex(dtype):
     utils.gems_assert_equal(actual, expected)
 
 
+@CUDA_ONLY
 @pytest.mark.nonzero_static
 def test_nonzero_static_non_contiguous_transpose():
     torch.manual_seed(1)
@@ -142,6 +153,7 @@ def test_nonzero_static_non_contiguous_transpose():
     utils.gems_assert_equal(actual, expected)
 
 
+@CUDA_ONLY
 @pytest.mark.nonzero_static
 def test_nonzero_static_non_contiguous_slice():
     torch.manual_seed(2)
@@ -158,6 +170,7 @@ def test_nonzero_static_non_contiguous_slice():
     utils.gems_assert_equal(actual, expected)
 
 
+@CUDA_ONLY
 @pytest.mark.nonzero_static
 def test_nonzero_static_argument_errors():
     x = torch.ones((8,), device="cuda", dtype=torch.float32)
@@ -172,6 +185,7 @@ def test_nonzero_static_argument_errors():
         nonzero_static(x, size=-1, fill_value=-1)
 
 
+@CUDA_ONLY
 @pytest.mark.nonzero_static
 def test_nonzero_static_rejects_bool_size():
     x = torch.ones((8,), device="cuda", dtype=torch.float32)
@@ -180,6 +194,7 @@ def test_nonzero_static_rejects_bool_size():
         nonzero_static(x, size=True, fill_value=-1)
 
 
+@CUDA_ONLY
 @pytest.mark.nonzero_static
 def test_nonzero_static_rejects_bool_fill_value():
     x = torch.ones((8,), device="cuda", dtype=torch.float32)
@@ -188,6 +203,7 @@ def test_nonzero_static_rejects_bool_fill_value():
         nonzero_static(x, size=4, fill_value=True)
 
 
+@CUDA_ONLY
 @pytest.mark.nonzero_static
 def test_nonzero_static_registered_with_use_gems():
     torch.manual_seed(3)
@@ -203,6 +219,7 @@ def test_nonzero_static_registered_with_use_gems():
     utils.gems_assert_equal(actual, expected)
 
 
+@CUDA_ONLY
 @pytest.mark.nonzero_static
 def test_nonzero_static_out():
     torch.manual_seed(4)
@@ -222,6 +239,7 @@ def test_nonzero_static_out():
     utils.gems_assert_equal(actual, expected)
 
 
+@CUDA_ONLY
 @pytest.mark.nonzero_static
 def test_nonzero_static_out_registered_with_use_gems():
     torch.manual_seed(5)
@@ -239,3 +257,123 @@ def test_nonzero_static_out_registered_with_use_gems():
     assert actual is actual_out
     assert tuple(actual.shape) == tuple(expected.shape)
     utils.gems_assert_equal(actual, expected)
+
+
+ASCEND_DTYPES = [
+    torch.bool,
+    torch.int32,
+    torch.float16,
+    torch.float32,
+    torch.bfloat16,
+]
+
+ASCEND_CASES = [
+    ((), torch.float32, 1.0, 4, -1),
+    ((0,), torch.float32, 0.0, 4, 7),
+    ((8,), torch.float32, 0.0, 4, -1),
+    ((8,), torch.float32, 1.0, 4, -1),
+    ((8,), torch.float32, 0.5, 0, -1),
+    ((8,), torch.float32, 0.5, 16, 7),
+    ((16385,), torch.float32, 0.1, 128, -1),
+    ((262144,), torch.float32, 0.01, 128, -1),
+    ((262144,), torch.bfloat16, 0.0001, 128, 7),
+    ((512, 512), torch.float32, 0.01, 128, -1),
+    ((1048577,), torch.float32, 0.001, 1024, -1),
+    ((2, 3, 4), torch.float32, 0.1, 16, -1),
+    ((2, 3, 4, 5), torch.float32, 0.1, 32, -1),
+    ((2, 2, 2, 2, 2, 1024), torch.float32, 0.01, 128, -1),
+]
+
+
+def assert_ascend_matches(shape, dtype, nnz_ratio, size, fill_value):
+    torch.manual_seed(0)
+    x_cpu = make_input(shape, dtype, nnz_ratio, "cpu")
+    expected = torch.nonzero_static(
+        utils.to_reference(x_cpu), size=size, fill_value=fill_value
+    )
+    actual = flag_gems.nonzero_static(
+        x_cpu.to(flag_gems.device),
+        size=size,
+        fill_value=fill_value,
+    )
+    assert actual.dtype == torch.int64
+    assert tuple(actual.shape) == (size, len(shape))
+    utils.gems_assert_equal(actual.cpu(), expected)
+
+
+@ASCEND_ONLY
+@pytest.mark.nonzero_static
+@pytest.mark.parametrize("dtype", ASCEND_DTYPES)
+def test_nonzero_static_ascend_dtypes(dtype):
+    assert_ascend_matches((32, 128), dtype, 0.1, 128, -1)
+
+
+@ASCEND_ONLY
+@pytest.mark.nonzero_static
+@pytest.mark.parametrize("shape,dtype,nnz_ratio,size,fill_value", ASCEND_CASES)
+def test_nonzero_static_ascend_cases(shape, dtype, nnz_ratio, size, fill_value):
+    assert_ascend_matches(shape, dtype, nnz_ratio, size, fill_value)
+
+
+@ASCEND_ONLY
+@pytest.mark.nonzero_static
+def test_nonzero_static_ascend_non_contiguous():
+    torch.manual_seed(1)
+    x_cpu = make_input((16, 32), torch.float32, 0.2, "cpu").t()
+    expected = torch.nonzero_static(utils.to_reference(x_cpu), size=128, fill_value=7)
+    actual = flag_gems.nonzero_static(
+        x_cpu.to(flag_gems.device), size=128, fill_value=7
+    )
+    utils.gems_assert_equal(actual.cpu(), expected)
+
+
+@ASCEND_ONLY
+@pytest.mark.nonzero_static
+def test_nonzero_static_ascend_registered():
+    torch.manual_seed(2)
+    x_cpu = make_input((4, 5), torch.float32, 0.4, "cpu")
+    x_npu = x_cpu.to(flag_gems.device)
+    expected = torch.nonzero_static(utils.to_reference(x_cpu), size=16, fill_value=-1)
+    with flag_gems.use_gems(include=["nonzero_static"]):
+        actual = torch.nonzero_static(x_npu, size=16, fill_value=-1)
+    utils.gems_assert_equal(actual.cpu(), expected)
+
+
+@ASCEND_ONLY
+@pytest.mark.nonzero_static
+def test_nonzero_static_ascend_out():
+    torch.manual_seed(3)
+    x_cpu = make_input((4, 5), torch.float32, 0.4, "cpu")
+    x_npu = x_cpu.to(flag_gems.device)
+    expected = torch.nonzero_static(utils.to_reference(x_cpu), size=16, fill_value=7)
+    out = torch.empty((1, 1), device=flag_gems.device, dtype=torch.int64)
+    with flag_gems.use_gems(include=["nonzero_static_out"]):
+        actual = torch.nonzero_static(x_npu, size=16, fill_value=7, out=out)
+    assert actual is out
+    assert tuple(actual.shape) == (16, 2)
+    utils.gems_assert_equal(actual.cpu(), expected)
+
+
+@ASCEND_ONLY
+@pytest.mark.nonzero_static
+def test_nonzero_static_ascend_sparse_group_fallback():
+    x_cpu = torch.zeros(8193, dtype=torch.bfloat16)
+    x_cpu[[1, 2, 3, 40, 41, 2050]] = 1
+    expected = torch.nonzero_static(utils.to_reference(x_cpu), size=4, fill_value=-1)
+    actual = flag_gems.nonzero_static(x_cpu.to(flag_gems.device), size=4, fill_value=-1)
+    utils.gems_assert_equal(actual.cpu(), expected)
+
+
+@ASCEND_ONLY
+@pytest.mark.nonzero_static
+def test_nonzero_static_ascend_bfloat16_special_values():
+    x_cpu = torch.zeros(8193, dtype=torch.bfloat16)
+    x_cpu[:7] = torch.tensor(
+        [0.0, -0.0, float("nan"), float("inf"), -float("inf"), 1.0, -1.0],
+        dtype=torch.bfloat16,
+    )
+    expected = torch.nonzero_static(utils.to_reference(x_cpu), size=128, fill_value=-1)
+    actual = flag_gems.nonzero_static(
+        x_cpu.to(flag_gems.device), size=128, fill_value=-1
+    )
+    utils.gems_assert_equal(actual.cpu(), expected)
