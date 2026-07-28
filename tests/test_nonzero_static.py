@@ -175,7 +175,7 @@ def test_nonzero_static_rejects_bool_arguments():
         flag_gems.nonzero_static(input, size=4, fill_value=True)
 
 
-@pytest.mark.nonzero_static
+@pytest.mark.nonzero_static_out
 def test_nonzero_static_out():
     torch.manual_seed(2)
     input = make_input((4, 5), torch.float32, 0.4)
