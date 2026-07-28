@@ -203,7 +203,7 @@ def test_nonzero_static_registered_with_use_gems():
     utils.gems_assert_equal(actual, expected)
 
 
-@pytest.mark.nonzero_static
+@pytest.mark.nonzero_static_out
 def test_nonzero_static_out():
     torch.manual_seed(4)
     x_cpu = make_input((4, 5), torch.float32, 0.4, "cpu")
@@ -222,7 +222,7 @@ def test_nonzero_static_out():
     utils.gems_assert_equal(actual, expected)
 
 
-@pytest.mark.nonzero_static
+@pytest.mark.nonzero_static_out
 def test_nonzero_static_out_registered_with_use_gems():
     torch.manual_seed(5)
     x_cpu = make_input((4, 5), torch.float32, 0.4, "cpu")

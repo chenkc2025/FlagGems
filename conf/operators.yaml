@@ -6267,6 +6267,17 @@ ops:
       - Tensor
     stages:
       - alpha: '5.4'
+  - id: nonzero_static_out
+    description: |
+      A variant of `nonzero_static` that writes the fixed-size result to `out`.
+    for:
+      - nonzero_static.out
+    labels:
+      - aten
+    kind:
+      - Tensor
+    stages:
+      - alpha: '5.4'
   - id: norm
     description: |
       Computes the norm of vectors, matrices, and tensors.
