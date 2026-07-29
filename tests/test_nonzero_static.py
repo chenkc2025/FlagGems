@@ -183,7 +183,7 @@ def test_nonzero_static_out():
     if ref_input.device != input.device:
         pytest.skip("nonzero_static.out layout requires a backend-native reference")
 
-    expected_out = torch.empty((1, 1), device=ref_input.device, dtype=torch.int64)
+    expected_out = torch.empty(0, device=ref_input.device, dtype=torch.int64)
     expected = torch.nonzero_static(
         ref_input,
         size=16,
