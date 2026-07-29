@@ -180,16 +180,18 @@ def test_nonzero_static_out():
     torch.manual_seed(2)
     input = make_input((4, 5), torch.float32, 0.4)
     ref_input = utils.to_reference(input)
-    if ref_input.device != input.device:
-        pytest.skip("nonzero_static.out layout requires a backend-native reference")
-
-    expected_out = torch.empty(0, device=ref_input.device, dtype=torch.int64)
-    expected = torch.nonzero_static(
-        ref_input,
-        size=16,
-        fill_value=7,
-        out=expected_out,
-    )
+    if ref_input.device == input.device:
+        expected_out = torch.empty(0, device=ref_input.device, dtype=torch.int64)
+        expected = torch.nonzero_static(
+            ref_input,
+            size=16,
+            fill_value=7,
+            out=expected_out,
+        )
+    else:
+        expected = torch.nonzero_static(ref_input, size=16, fill_value=7)
+        if flag_gems.vendor_name == "nvidia":
+            expected = expected.transpose(0, 1)
 
     actual_out = torch.empty((1, 1), device=flag_gems.device, dtype=torch.int64)
     with flag_gems.use_gems(include=["nonzero_static_out"]):
