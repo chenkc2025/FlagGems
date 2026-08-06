@@ -114,10 +114,6 @@ class NonzeroStaticBenchmark(base.GenericBenchmark):
 
 
 @pytest.mark.nonzero_static
-@pytest.mark.skipif(
-    flag_gems.vendor_name not in ("nvidia", "ascend"),
-    reason="nonzero_static is implemented for NVIDIA and Ascend",
-)
 def test_perf_nonzero_static():
     baseline_nonzero_static = _get_baseline_nonzero_static()
     bench = NonzeroStaticBenchmark(
