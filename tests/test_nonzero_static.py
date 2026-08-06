@@ -117,10 +117,10 @@ def _ascend_nonzero_static_reference(input, size, fill_value):
 
 
 def assert_nonzero_static_matches(input, size, fill_value):
+    ref_input = utils.to_reference(input)
     if flag_gems.vendor_name == "ascend":
-        expected = _ascend_nonzero_static_reference(input, size, fill_value)
+        expected = _ascend_nonzero_static_reference(ref_input, size, fill_value)
     else:
-        ref_input = utils.to_reference(input)
         expected = torch.nonzero_static(
             ref_input,
             size=size,
@@ -196,7 +196,7 @@ def test_nonzero_static_out():
     input = make_input((4, 5), torch.float32, 0.4)
     ref_input = utils.to_reference(input)
     if flag_gems.vendor_name == "ascend":
-        expected = _ascend_nonzero_static_reference(input, size=16, fill_value=7)
+        expected = _ascend_nonzero_static_reference(ref_input, size=16, fill_value=7)
     elif ref_input.device == input.device:
         expected_out = torch.empty(0, device=ref_input.device, dtype=torch.int64)
         expected = torch.nonzero_static(
