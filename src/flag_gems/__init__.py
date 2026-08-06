@@ -75,6 +75,7 @@ _FULL_CONFIG = (
     ("__xor__.Scalar", xor_scalar),
     ("__xor__.Tensor", xor),
     ("_adaptive_avg_pool2d", adaptive_avg_pool2d),
+    ("_adaptive_avg_pool2d_backward", _adaptive_avg_pool2d_backward),
     ("_add_relu.Tensor", _add_relu),
     (
         "_amp_foreach_non_finite_check_and_unscale_",
@@ -88,6 +89,7 @@ _FULL_CONFIG = (
     ("_conj", _conj),
     ("_conv_depthwise2d", _conv_depthwise2d),
     ("_convert_weight_to_int4pack", _convert_weight_to_int4pack),
+    ("_cudnn_attention_forward", cudnn_attention_forward),
     ("_efficient_attention_backward", efficient_attention_backward),
     ("_embedding_bag_dense_backward", _embedding_bag_dense_backward),
     (
@@ -749,6 +751,7 @@ _FULL_CONFIG = (
     ("replication_pad1d", replication_pad1d),
     ("replication_pad1d.out", replication_pad1d_out),
     ("replication_pad3d", replication_pad3d),
+    ("replication_pad3d_backward", replication_pad3d_backward),
     ("resize", resize),
     ("resize_", resize_),
     ("resize_as", resize_as),

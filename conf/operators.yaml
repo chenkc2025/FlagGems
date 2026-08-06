@@ -122,6 +122,20 @@ ops:
       - NeuralNetwork
     stages:
       - beta: '5.3'
+  - id: adaptive_avg_pool2d_backward
+    description: |
+      Computes the gradient of two-dimensional adaptive average pooling with
+      respect to the input tensor.
+    for:
+      - _adaptive_avg_pool2d_backward
+    labels:
+      - aten
+      - KernelGen
+      - reduction
+    kind:
+      - NeuralNetwork
+    stages:
+      - alpha: '5.4'
   - id: adaptive_max_pool3d_backward
     description: |
       Computes the gradient for adaptive max pooling 3D.
@@ -2225,6 +2239,20 @@ ops:
     stages:
       - stable: '2.0'
       - removed: '3.0'
+  - id: cudnn_attention_forward
+    description: |
+      Forward kernel for cuDNN attention, computing scaled dot-product
+      attention outputs and log-sum-exp statistics.  Uses a Triton
+      FlashAttention-2 kernel in BHSD layout.
+    for:
+      - _cudnn_attention_forward
+    labels:
+      - aten
+      - NoCPU
+    kind:
+      - NeuralNetwork
+    stages:
+      - beta: '5.5'
   - id: cudnn_batch_norm_backward
     description: Triton kernel implementation for cudnn_batch_norm_backward.
     for:
@@ -7852,6 +7880,19 @@ ops:
     stages:
       - alpha: '5.0'
       - beta: '5.3'
+  - id: replication_pad3d_backward
+    description: |
+      Accumulates output gradients into the clamped input positions used by
+      three-dimensional replication padding.
+    for:
+      - replication_pad3d_backward
+    labels:
+      - aten
+      - KernelGen
+    kind:
+      - NeuralNetwork
+    stages:
+      - alpha: '5.4'
   - id: reshape_and_cache
     description: Store the key/value token states into the pre-allcated kv_cache buffers of paged attention.
     for:
