@@ -90,13 +90,33 @@ def make_input(shape, dtype, nnz_ratio):
     return input
 
 
-def assert_nonzero_static_matches(input, size, fill_value):
-    ref_input = utils.to_reference(input)
-    expected = torch.nonzero_static(
-        ref_input,
-        size=size,
-        fill_value=fill_value,
+def _ascend_nonzero_static_reference(input, size, fill_value):
+    out = torch.full(
+        (size, input.dim()),
+        fill_value,
+        dtype=torch.int64,
+        device=input.device,
     )
+    if size == 0 or input.dim() == 0:
+        return out
+
+    indices = torch.nonzero(input)
+    copy_len = min(size, indices.shape[0])
+    if copy_len > 0:
+        out[:copy_len].copy_(indices[:copy_len])
+    return out
+
+
+def assert_nonzero_static_matches(input, size, fill_value):
+    if flag_gems.vendor_name == "ascend":
+        expected = _ascend_nonzero_static_reference(input, size, fill_value)
+    else:
+        ref_input = utils.to_reference(input)
+        expected = torch.nonzero_static(
+            ref_input,
+            size=size,
+            fill_value=fill_value,
+        )
 
     with flag_gems.use_gems(include=["nonzero_static"]):
         actual = torch.nonzero_static(
@@ -166,7 +186,9 @@ def test_nonzero_static_out():
     torch.manual_seed(2)
     input = make_input((4, 5), torch.float32, 0.4)
     ref_input = utils.to_reference(input)
-    if ref_input.device == input.device:
+    if flag_gems.vendor_name == "ascend":
+        expected = _ascend_nonzero_static_reference(input, size=16, fill_value=7)
+    elif ref_input.device == input.device:
         expected_out = torch.empty(0, device=ref_input.device, dtype=torch.int64)
         expected = torch.nonzero_static(
             ref_input,
