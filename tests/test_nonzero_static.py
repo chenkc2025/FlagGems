@@ -20,6 +20,15 @@ import flag_gems
 from . import accuracy_utils as utils
 from . import conftest as cfg
 
+IS_ASCEND = flag_gems.vendor_name == "ascend"
+CUDA_ONLY = pytest.mark.skipif(
+    flag_gems.vendor_name != "nvidia",
+    reason="nonzero_static complex and CUDA kernel paths require NVIDIA",
+)
+ASCEND_ONLY = pytest.mark.skipif(
+    not IS_ASCEND,
+    reason="nonzero_static Ascend paths require NPU",
+)
 FULL_ONLY = pytest.mark.skipif(
     cfg.QUICK_MODE,
     reason="large nonzero_static path cases are excluded from quick mode",
@@ -216,6 +225,7 @@ def test_nonzero_static_out():
     utils.gems_assert_equal(actual, expected)
 
 
+@CUDA_ONLY
 @FULL_ONLY
 @pytest.mark.nonzero_static
 @pytest.mark.parametrize("dtype", CUDA_COMPLEX_DTYPES)
@@ -226,6 +236,7 @@ def test_nonzero_static_cuda_complex(dtype):
     assert_nonzero_static_matches(input, size=4, fill_value=9)
 
 
+@CUDA_ONLY
 @FULL_ONLY
 @pytest.mark.nonzero_static
 @pytest.mark.parametrize(
@@ -238,6 +249,7 @@ def test_nonzero_static_cuda_paths(shape, dtype, nnz_ratio, size, fill_value):
     assert_nonzero_static_matches(input, size=size, fill_value=fill_value)
 
 
+@ASCEND_ONLY
 @FULL_ONLY
 @pytest.mark.nonzero_static
 @pytest.mark.parametrize(
@@ -250,6 +262,7 @@ def test_nonzero_static_ascend_paths(shape, dtype, nnz_ratio, size, fill_value):
     assert_nonzero_static_matches(input, size=size, fill_value=fill_value)
 
 
+@ASCEND_ONLY
 @FULL_ONLY
 @pytest.mark.nonzero_static
 def test_nonzero_static_ascend_sparse_group_fallback():
@@ -258,6 +271,7 @@ def test_nonzero_static_ascend_sparse_group_fallback():
     assert_nonzero_static_matches(input, size=4, fill_value=-1)
 
 
+@ASCEND_ONLY
 @FULL_ONLY
 @pytest.mark.nonzero_static
 def test_nonzero_static_ascend_bfloat16_special_values():
