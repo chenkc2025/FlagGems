@@ -1015,6 +1015,7 @@ def _nonzero_static_impl(
     sparse_scan_group_size=None,
     sparse_count_group_blocks=1,
     small_counts_linear_output=False,
+    small_counts_expand_block_size=1024,
     use_bfloat16_bits=False,
 ):
     size = _check_int_arg(size, "size")
@@ -1250,7 +1251,10 @@ def _nonzero_static_impl(
                 STORE_LINEAR=small_counts_linear_output,
             )
             if small_counts_linear_output:
-                expand_block_size = min(1024, 1 << (size - 1).bit_length())
+                expand_block_size = min(
+                    small_counts_expand_block_size,
+                    1 << (size - 1).bit_length(),
+                )
                 _nonzero_static_expand_coordinates_kernel[
                     (triton.cdiv(size, expand_block_size), ndim)
                 ](

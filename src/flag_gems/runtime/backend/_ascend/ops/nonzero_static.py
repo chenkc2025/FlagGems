@@ -34,6 +34,7 @@ ASCEND_SPARSE_GROUP_RATIO = 1024
 ASCEND_SPARSE_SCAN_GROUP_SIZE = 64
 ASCEND_SPARSE_GROUP_SELECT_MAX_NNZ = 1
 ASCEND_SPARSE_COUNT_GROUP_BLOCKS = 8
+ASCEND_SMALL_LINEAR_EXPAND_BLOCK_SIZE = 512
 ASCEND_SPARSE_MAX_COUNT_GROUPS = 4096
 ASCEND_SPARSE_MAX_NUMEL = (
     ASCEND_SPARSE_BLOCK_SIZE
@@ -92,6 +93,7 @@ def nonzero_static(input: torch.Tensor, *, size: int, fill_value: int = -1):
         sparse_group_select_max_nnz=ASCEND_SPARSE_GROUP_SELECT_MAX_NNZ,
         sparse_count_group_blocks=ASCEND_SPARSE_COUNT_GROUP_BLOCKS,
         small_counts_linear_output=_use_small_linear_output(input, size),
+        small_counts_expand_block_size=ASCEND_SMALL_LINEAR_EXPAND_BLOCK_SIZE,
         use_bfloat16_bits=True,
     )
 
@@ -117,5 +119,6 @@ def nonzero_static_out(
         sparse_group_select_max_nnz=ASCEND_SPARSE_GROUP_SELECT_MAX_NNZ,
         sparse_count_group_blocks=ASCEND_SPARSE_COUNT_GROUP_BLOCKS,
         small_counts_linear_output=_use_small_linear_output(input, size),
+        small_counts_expand_block_size=ASCEND_SMALL_LINEAR_EXPAND_BLOCK_SIZE,
         use_bfloat16_bits=True,
     )
