@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-from functools import lru_cache
 from typing import Generator
 
 import pytest
@@ -28,53 +26,6 @@ BENCH_DTYPES = [  # The Ascend performance report is scoped to FP16 and BF16.
     torch.bfloat16,
 ]
 
-# ATen composite baseline for Ascend benchmark.
-# This is not a handwritten Ascend C kernel.
-# It composes at::full, at::nonzero, and copy_.
-ASCEND_ATEN_BASELINE_SOURCE = r"""
-#include <ATen/Functions.h>
-#include <torch/library.h>
-
-#include <algorithm>
-#include <cstdint>
-
-namespace {
-
-at::Tensor nonzero_static(
-    const at::Tensor& input,
-    int64_t size,
-    int64_t fill_value) {
-  TORCH_CHECK(size >= 0, "nonzero_static: size must be non-negative");
-
-  auto out = at::full(
-      {size, input.dim()}, fill_value, input.options().dtype(at::kLong));
-  if (size == 0 || input.dim() == 0) {
-    return out;
-  }
-
-  auto indices = at::nonzero(input);
-  auto copy_len = std::min<int64_t>(size, indices.size(0));
-  if (copy_len > 0) {
-    out.narrow(0, 0, copy_len)
-        .copy_(indices.narrow(0, 0, copy_len));
-  }
-  return out;
-}
-
-}
-
-TORCH_LIBRARY(flag_gems_ascend_aten_baseline, m) {
-  m.def(
-      "nonzero_static(Tensor input, int size, int fill_value=-1) -> Tensor");
-}
-
-TORCH_LIBRARY_IMPL(
-    flag_gems_ascend_aten_baseline,
-    CompositeExplicitAutograd,
-    m) {
-  m.impl("nonzero_static", TORCH_FN(nonzero_static));
-}
-"""
 BENCH_CASES = [
     ((1024,), 0.0, 128, -1),
     ((1024,), 0.1, 128, -1),
@@ -93,21 +44,24 @@ BENCH_CASES = [
 ]
 
 
-@lru_cache(maxsize=1)
-def _load_ascend_aten_baseline():
-    from torch.utils.cpp_extension import load_inline
+def _ascend_nonzero_static_baseline(input, size, fill_value=-1):
+    if size < 0:
+        raise RuntimeError("nonzero_static: size must be non-negative")
 
-    # Keep the composition behind one C++ custom-op boundary so benchmark
-    # timing does not include Python-side composition overhead.
-    # This intentionally requires the C++ extension toolchain on benchmark hosts.
-    load_inline(
-        name="flag_gems_ascend_aten_nonzero_static_baseline",
-        cpp_sources=ASCEND_ATEN_BASELINE_SOURCE,
-        extra_cflags=["-O3"],
-        is_python_module=False,
-        verbose=os.getenv("FLAGGEMS_ASCEND_ATEN_BASELINE_VERBOSE", "0") == "1",
+    out = torch.full(
+        (size, input.dim()),
+        fill_value,
+        dtype=torch.int64,
+        device=input.device,
     )
-    return torch.ops.flag_gems_ascend_aten_baseline.nonzero_static
+    if size == 0 or input.dim() == 0:
+        return out
+
+    indices = torch.nonzero(input)
+    copy_len = min(size, indices.shape[0])
+    if copy_len > 0:
+        out[:copy_len].copy_(indices[:copy_len])
+    return out
 
 
 def _make_input(shape, dtype, nnz_ratio, device):
@@ -128,8 +82,8 @@ def _make_input(shape, dtype, nnz_ratio, device):
 def _get_baseline_nonzero_static():
     if flag_gems.vendor_name == "ascend":
         # torch.nonzero_static has no native Ascend dispatch kernel and falls
-        # back to CPU, so use the device-resident ATen composition instead.
-        return _load_ascend_aten_baseline()
+        # back to CPU, so compose the available device operators instead.
+        return _ascend_nonzero_static_baseline
     return torch.nonzero_static
 
 
