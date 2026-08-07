@@ -21,6 +21,7 @@ from . import accuracy_utils as utils
 from . import conftest as cfg
 
 IS_ASCEND = flag_gems.vendor_name == "ascend"
+COMPOSED_REFERENCE_VENDORS = ("ascend", "hygon")
 CUDA_ONLY = pytest.mark.skipif(
     flag_gems.vendor_name != "nvidia",
     reason="nonzero_static complex and CUDA kernel paths require NVIDIA",
@@ -99,7 +100,7 @@ def make_input(shape, dtype, nnz_ratio):
     return input
 
 
-def _ascend_nonzero_static_reference(input, size, fill_value):
+def _composed_nonzero_static_reference(input, size, fill_value):
     out = torch.full(
         (size, input.dim()),
         fill_value,
@@ -118,8 +119,8 @@ def _ascend_nonzero_static_reference(input, size, fill_value):
 
 def assert_nonzero_static_matches(input, size, fill_value):
     ref_input = utils.to_reference(input)
-    if flag_gems.vendor_name == "ascend":
-        expected = _ascend_nonzero_static_reference(ref_input, size, fill_value)
+    if flag_gems.vendor_name in COMPOSED_REFERENCE_VENDORS:
+        expected = _composed_nonzero_static_reference(ref_input, size, fill_value)
     else:
         expected = torch.nonzero_static(
             ref_input,
@@ -195,8 +196,8 @@ def test_nonzero_static_out():
     torch.manual_seed(2)
     input = make_input((4, 5), torch.float32, 0.4)
     ref_input = utils.to_reference(input)
-    if flag_gems.vendor_name == "ascend":
-        expected = _ascend_nonzero_static_reference(ref_input, size=16, fill_value=7)
+    if flag_gems.vendor_name in COMPOSED_REFERENCE_VENDORS:
+        expected = _composed_nonzero_static_reference(ref_input, size=16, fill_value=7)
     elif ref_input.device == input.device:
         expected_out = torch.empty(0, device=ref_input.device, dtype=torch.int64)
         expected = torch.nonzero_static(

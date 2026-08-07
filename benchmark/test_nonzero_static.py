@@ -44,7 +44,7 @@ BENCH_CASES = [
 ]
 
 
-def _ascend_nonzero_static_baseline(input, size, fill_value=-1):
+def _composed_nonzero_static_baseline(input, size, fill_value=-1):
     if size < 0:
         raise RuntimeError("nonzero_static: size must be non-negative")
 
@@ -80,10 +80,8 @@ def _make_input(shape, dtype, nnz_ratio, device):
 
 
 def _get_baseline_nonzero_static():
-    if flag_gems.vendor_name == "ascend":
-        # torch.nonzero_static has no native Ascend dispatch kernel and falls
-        # back to CPU, so compose the available device operators instead.
-        return _ascend_nonzero_static_baseline
+    if flag_gems.vendor_name in ("ascend", "hygon"):
+        return _composed_nonzero_static_baseline
     return torch.nonzero_static
 
 
